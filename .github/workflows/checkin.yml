@@ -9,7 +9,6 @@ on:
 jobs:
   checkin:
     runs-on: ubuntu-latest
-    permissions: write-all
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,6 +23,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
+      - name: Restore Token Cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .token_cache
+          key: token-cache-${{ github.run_id }}
+          restore-keys: |
+            token-cache-
+
       - name: Run Checkin Script
         env:
           USER_EMAIL: ${{ secrets.USER_EMAIL }}
@@ -32,15 +39,8 @@ jobs:
         run: |
           python checkin.py
 
-      - name: Update Token Secret
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ -f "new_token.txt" ]; then
-            echo "new_token.txt found. Updating USER_TOKEN secret..."
-            gh secret set USER_TOKEN < new_token.txt
-            rm new_token.txt
-            echo "USER_TOKEN secret updated successfully."
-          else
-            echo "No new_token.txt found. Token update skipped."
-          fi
+      - name: Save Token Cache
+        uses: actions/cache/save@v4
+        with:
+          path: .token_cache
+          key: token-cache-${{ github.run_id }}

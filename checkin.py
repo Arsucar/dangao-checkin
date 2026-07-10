@@ -23,12 +23,31 @@ def checkin():
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    user_token = os.environ.get("USER_TOKEN")
+    # 读取 Token 缓存
+    token_cache_dir = ".token_cache"
+    token_cache_path = os.path.join(token_cache_dir, "token.txt")
+    user_token = None
+
+    if os.path.exists(token_cache_path):
+        try:
+            with open(token_cache_path, "r", encoding="utf-8") as f:
+                user_token = f.read().strip()
+            print(f"Loaded token from cache file: {token_cache_path}")
+        except Exception as e:
+            print(f"Error reading token cache file: {e}")
+
+    if not user_token:
+        user_token = os.environ.get("USER_TOKEN")
+        if user_token:
+            print("Fallback to USER_TOKEN from environment.")
+        else:
+            print("No cached token or environment token found.")
+
     need_login = False
 
-    # 2. 如果存在 USER_TOKEN，先尝试使用该 Token 直接进行签到
+    # 2. 如果存在 Token，先尝试直接进行签到
     if user_token:
-        print("Found USER_TOKEN, attempting to check in directly...")
+        print("Attempting to check in directly with existing token...")
         checkin_headers = headers.copy()
         checkin_headers["Authorization"] = f"Bearer {user_token}"
         try:
@@ -43,7 +62,7 @@ def checkin():
                 print("今天已签到或已完成，退出程序。")
                 sys.exit(0)
             elif status_code == 401:
-                print("USER_TOKEN is invalid or expired (401 Unauthorized). Will login to obtain a new token.")
+                print("Token is invalid or expired (401 Unauthorized). Will login to obtain a new token.")
                 need_login = True
             else:
                 # 其它状态码
@@ -53,10 +72,9 @@ def checkin():
             print(f"Error during direct checkin: {e}.")
             sys.exit(1)
     else:
-        print("USER_TOKEN not found in environment.")
         need_login = True
 
-    # 3. 如果 USER_TOKEN 不存在，或者使用该 Token 请求时接口返回了 401
+    # 3. 如果 Token 不存在，或者使用该 Token 请求时接口返回了 401
     if need_login:
         print("Proceeding to login and obtain a new token...")
         email = os.environ.get("USER_EMAIL")
@@ -84,10 +102,12 @@ def checkin():
                 print(f"Response: {res_json}")
                 sys.exit(1)
             
-            # 将新 Token 写入本地文件 new_token.txt，同时打印日志说明已生成新 Token
-            with open("new_token.txt", "w") as f:
+            # 创建缓存目录（如果不存在）并将新 Token 写入本地文件 .token_cache/token.txt
+            if not os.path.exists(token_cache_dir):
+                os.makedirs(token_cache_dir, exist_ok=True)
+            with open(token_cache_path, "w", encoding="utf-8") as f:
                 f.write(token.strip())
-            print("Successfully generated and wrote new token to new_token.txt")
+            print(f"Successfully generated and wrote new token to {token_cache_path}")
             
             # 使用新 Token 重新发送签到请求
             checkin_headers = headers.copy()
